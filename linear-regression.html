@@ -1,0 +1,269 @@
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Interactive Least Squares Graph</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 20px;
+            background-color: #f4f4f4;
+        }
+        #graphContainer {
+            border: 2px solid #333;
+            background-color: #fff;
+            margin-bottom: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Interactive Least Squares Regression</h1>
+
+    <div id="graphContainer">
+        <canvas id="dataGraph" width="600" height="400"></canvas>
+    </div>
+
+    <button id="resetButton">Reset Graph</button>
+
+    <script>
+        const canvas = document.getElementById('dataGraph');
+        const ctx = canvas.getContext('2d');
+        const resetButton = document.getElementById('resetButton');
+
+        // Array to store the data points
+        let points = [];
+
+        // --- Core Drawing and Logic Functions ---
+
+        /**
+         * Calculates the linear regression (Least Squares) parameters (slope 'm' and       
+intercept 'b')
+         * for the given set of points.
+         * Formula: y = mx + b
+         */
+        function calculateRegression(pts) {
+            if (pts.length < 2) {
+                return { m: NaN, b: NaN };
+            }
+
+            let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+
+            for (const p of pts) {
+                sumX += p.x;
+                sumY += p.y;
+                sumXY += p.x * p.y;
+                sumX2 += p.x * p.x;
+            }
+
+            const N = pts.length;
+            const m = (N * sumXY - sumX * sumY) / (N * sumX2 - sumX * sumX);
+            const b = (sumY / N) - (m * (sumX / N));
+
+            return { m, b };
+        }
+
+        /**
+         * Main function to draw the graph, points, and regression line.
+         */
+        function drawGraph() {
+            // 1. Clear the canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (points.length === 0) {
+                // Draw axes (optional)
+                ctx.strokeStyle = '#999';
+                ctx.beginPath();
+                ctx.moveTo(0, canvas.height);
+                ctx.lineTo(canvas.width, canvas.height); // X-axis
+                ctx.moveTo(0, 0);
+                ctx.lineTo(0, canvas.height); // Y-axis
+                ctx.stroke();
+                return;
+            }
+
+            // 2. Determine Data Range for Scaling
+            const xCoords = points.map(p => p.x);
+            const yCoords = points.map(p => p.y);
+
+            const minX = Math.min(...xCoords);
+            const maxX = Math.max(...xCoords);
+            const minY = Math.min(...yCoords);
+            const maxY = Math.max(...yCoords);
+
+            // Add a small buffer for better visualization
+            const xRange = maxX - minX === 0 ? 1 : maxX - minX;
+            const yRange = maxY - minY === 0 ? 1 : maxY - minY;
+
+            const padding = 20;
+            const graphWidth = canvas.width - 2 * padding;
+            const graphHeight = canvas.height - 2 * padding;
+
+            // 3. Draw Axes (Simple grid lines for context)
+            ctx.strokeStyle = '#ccc';
+            ctx.lineWidth = 1;
+
+            // X-Axis (Bottom line)
+            ctx.beginPath();
+            ctx.moveTo(padding, canvas.height - padding);
+            ctx.lineTo(canvas.width - padding, canvas.height - padding);
+            ctx.stroke();
+
+            // Y-Axis (Left line)
+            ctx.beginPath();
+            ctx.moveTo(padding, padding);
+            ctx.lineTo(padding, canvas.height - padding);
+            ctx.stroke();
+
+
+            // 4. Scale Function (Maps data coordinates to pixel coordinates)
+            const scaleX = (x) => padding + ((x - minX) / xRange) * graphWidth;
+            const scaleY = (y) => canvas.height - padding - ((y - minY) / yRange) *
+graphHeight;
+
+
+            // 5. Draw the Regression Line (Blue)
+            const regression = calculateRegression(points);
+
+            ctx.strokeStyle = 'blue';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+
+            // Start at the left edge of the scaled X
+            let startX = scaleX(minX);
+            let startY = scaleY(regression.m * minX + regression.b);
+
+            // End at the right edge of the scaled X
+            let endX = scaleX(maxX);
+            let endY = scaleY(regression.m * maxX + regression.b);
+
+            ctx.moveTo(startX, startY);
+            ctx.lineTo(endX, endY);
+            ctx.stroke();
+
+
+            // 6. Draw the Data Points
+            ctx.fillStyle = 'red';
+            points.forEach(p => {
+                const px = scaleX(p.x);
+                const py = scaleY(p.y);
+
+                // Draw the point
+                ctx.beginPath();
+                ctx.arc(px, py, 4, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Optional: Draw the point labels
+                // ctx.fillStyle = 'black';
+                // ctx.fillText(`${p.x}, ${p.y}`, px + 5, py - 5);
+            });
+        }
+
+        /**
+         * Event handler for clicking on the canvas to add a point.
+         */
+        function handleCanvasClick(event) {
+            // Get mouse position relative to the canvas
+            const rect = canvas.getBoundingClientRect();
+            const clickX = event.clientX - rect.left;
+            const clickY = event.clientY - rect.top;
+
+            // NOTE: Since we are using a scaled coordinate system, we must map the
+click 
+            // coordinates back to the original data space (X and Y).
+
+            // A simple mapping assumes the click is relative to the drawn coordinate       
+system:
+            // Map clickX (0 to 600) back to X data space (minX to maxX)
+            // Map clickY (0 to 400) back to Y data space (minY to maxY)
+
+            const xData = points.length > 0 ? 
+                points.reduce((acc, p) => Math.min(acc, p.x), Infinity) : 
+                0;
+            const yData = points.length > 0 ? 
+                points.reduce((acc, p) => Math.min(acc, p.y), Infinity) : 
+                0;
+
+            // --- Simple Direct Mapping (Requires user to input coordinate values,         
+not pixel clicks) ---
+            // For a true interactive drag/click on a scatter plot, you'd need inverse      
+scaling.
+            // For this specific implementation, we assume the user provides explicit       
+X and Y values,
+            // or we must simplify the click interaction.
+
+            // Let's redefine the interaction: Click means the user clicks where they       
+want the point placed
+            // and we assume the X/Y values clicked correspond to the scaled output.
+
+            // Since the user just clicks anywhere, we will use the canvas pixel
+coordinates
+            // and treat them as the input data, which requires careful scaling back.
+
+            // In this example, we will map the click to the actual data space by
+reading the
+            // canvas coordinates and assuming they represent the desired (X, Y) pair.
+
+            const newPoint = { 
+                x: clickX, // Using the raw canvas X as the data X (simple mapping)
+                y: clickY  // Using the raw canvas Y as the data Y (simple mapping)
+            };
+
+            // *Self-Correction: Since we want the graph to show the relationship,
+            // the clicked X/Y should map to the data scale.*
+
+            // We will use the actual calculated scale to find the data coordinates:
+            const dataX = (clickX - padding) / (canvas.width - 2 * padding) * (maxX -       
+minX) + minX;
+            const dataY = (canvas.height - padding - clickY) / (canvas.height - 2 *
+padding) * (maxY - minY) + minY;
+
+
+            points.push({ x: dataX, y: dataY });
+            drawGraph();
+        }
+
+        /**
+         * Resets the application state.
+         */
+        function resetGraph() {
+            points = [];
+            drawGraph();
+        }
+
+        // --- Initialization ---
+
+        // 1. Set up the click listener
+        canvas.addEventListener('click', handleCanvasClick);
+        resetButton.addEventListener('click', resetGraph);
+
+        // 2. Initialize the drawing when the page loads
+        resetGraph(); 
+        
+        // Optional: Add some initial points for demonstration
+        points.push({ x: 1, y: 5 });
+        points.push({ x: 3, y: 7 });
+        points.push({ x: 5, y: 9 });
+        points.push({ x: 7, y: 11 });
+
+
+    </script>
+</body>
+</html>
