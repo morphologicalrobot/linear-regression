@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Least Squares Regression</title>
+  <meta name="description" content="Interactive scatter plot with real-time linear least squares regression line. Click to add points." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --border: rgba(255,255,255,0.08);
+      --accent: #58a6ff;
+      --accent-glow: rgba(88,166,255,0.3);
+      --point: #f7cc5b;
+      --point-glow: rgba(247,204,91,0.4);
+      --line: #58a6ff;
+      --text: #c9d1d9;
+      --muted: #8b949e;
+      --axis: rgba(255,255,255,0.15);
+      --grid-line: rgba(255,255,255,0.05);
+      --font: 'Outfit', sans-serif;
+      --mono: 'JetBrains Mono', monospace;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+      background-image:
+        radial-gradient(circle at 15% 25%, rgba(88,166,255,0.06) 0%, transparent 45%),
+        radial-gradient(circle at 85% 75%, rgba(247,204,91,0.04) 0%, transparent 45%);
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 1.5rem;
+    }
+    header h1 {
+      font-size: 2rem;
+      font-weight: 600;
+      letter-spacing: -0.5px;
+    }
+    header h1 span { color: var(--accent); text-shadow: 0 0 20px var(--accent-glow); }
+    header p { color: var(--muted); font-size: 0.9rem; margin-top: 0.3rem; }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 1.5rem;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+      width: 100%;
+      max-width: 740px;
+    }
+
+    #graph-canvas {
+      display: block;
+      width: 100%;
+      border-radius: 12px;
+      cursor: crosshair;
+      background: transparent;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 1.2rem;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .stats {
+      display: flex;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+    }
+
+    .stat-item {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .stat-label {
+      font-size: 0.7rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .stat-value {
+      font-family: var(--mono);
+      font-size: 0.9rem;
+      color: var(--text);
+    }
+    .stat-value.empty { color: var(--muted); }
+
+    .btn-reset {
+      padding: 0.65rem 1.4rem;
+      background: transparent;
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      border-radius: 10px;
+      cursor: pointer;
+      font-family: var(--font);
+      font-weight: 600;
+      font-size: 0.9rem;
+      transition: all 0.25s;
+      white-space: nowrap;
+    }
+    .btn-reset:hover {
+      background: var(--accent);
+      color: #fff;
+      box-shadow: 0 0 20px var(--accent-glow);
+    }
+
+    .legend {
+      display: flex;
+      gap: 1.5rem;
+      margin-top: 1rem;
+      flex-wrap: wrap;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    .legend-dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: var(--point);
+      box-shadow: 0 0 6px var(--point-glow);
+    }
+    .legend-line {
+      width: 20px; height: 2px;
+      background: var(--line);
+      border-radius: 2px;
+      box-shadow: 0 0 6px var(--accent-glow);
+    }
+
+    footer {
+      margin-top: 1.5rem;
+      color: var(--muted);
+      font-size: 0.75rem;
+      opacity: 0.5;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Linear <span>Regression</span></h1>
+  <p>Click anywhere on the graph to add data points</p>
+</header>
+
+<div class="card">
+  <canvas id="graph-canvas"></canvas>
+
+  <div class="toolbar">
+    <div class="stats">
+      <div class="stat-item">
+        <span class="stat-label">Points</span>
+        <span class="stat-value" id="stat-n">—</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Slope (m)</span>
+        <span class="stat-value" id="stat-m">—</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Intercept (b)</span>
+        <span class="stat-value" id="stat-b">—</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Equation</span>
+        <span class="stat-value" id="stat-eq">—</span>
+      </div>
+    </div>
+    <button class="btn-reset" id="reset-btn">Reset</button>
+  </div>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot"></div> Data points</div>
+    <div class="legend-item"><div class="legend-line"></div> Regression line (LSR)</div>
+  </div>
+</div>
+
+<footer>Least Squares Regression Visualizer</footer>
+
+<script>
+  const canvas = document.getElementById('graph-canvas');
+  const ctx = canvas.getContext('2d');
+
+  // --- Stats elements ---
+  const statN  = document.getElementById('stat-n');
+  const statM  = document.getElementById('stat-m');
+  const statB  = document.getElementById('stat-b');
+  const statEq = document.getElementById('stat-eq');
+
+  // --- Data ---
+  let points = []; // [{x, y}] in data-space
+
+  // --- Graph layout ---
+  const PAD = { top: 30, right: 30, bottom: 50, left: 60 };
+  const DATA_RANGE = { xMin: -10, xMax: 10, yMin: -10, yMax: 10 };
+
+  // Resize canvas to match CSS width, keep square-ish
+  function resize() {
+    const w = canvas.parentElement.clientWidth - 48; // card padding
+    canvas.width  = w;
+    canvas.height = Math.round(w * 0.62);
+    draw();
+  }
+
+  // --- Coordinate mapping ---
+  function dataToCanvas(dx, dy) {
+    const { xMin, xMax, yMin, yMax } = DATA_RANGE;
+    const plotW = canvas.width  - PAD.left - PAD.right;
+    const plotH = canvas.height - PAD.top  - PAD.bottom;
+    const cx = PAD.left + ((dx - xMin) / (xMax - xMin)) * plotW;
+    const cy = PAD.top  + ((yMax - dy) / (yMax - yMin)) * plotH;
+    return { cx, cy };
+  }
+
+  function canvasToData(cx, cy) {
+    const { xMin, xMax, yMin, yMax } = DATA_RANGE;
+    const plotW = canvas.width  - PAD.left - PAD.right;
+    const plotH = canvas.height - PAD.top  - PAD.bottom;
+    const dx = xMin + ((cx - PAD.left)  / plotW) * (xMax - xMin);
+    const dy = yMax - ((cy - PAD.top)   / plotH) * (yMax - yMin);
+    return { dx, dy };
+  }
+
+  // --- Least Squares ---
+  function computeLSR(pts) {
+    const n = pts.length;
+    if (n < 2) return null;
+    let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+    for (const p of pts) {
+      sumX  += p.x;
+      sumY  += p.y;
+      sumXY += p.x * p.y;
+      sumX2 += p.x * p.x;
+    }
+    const denom = n * sumX2 - sumX * sumX;
+    if (Math.abs(denom) < 1e-10) return null; // vertical line
+    const m = (n * sumXY - sumX * sumY) / denom;
+    const b = (sumY - m * sumX) / n;
+    return { m, b };
+  }
+
+  // --- Drawing ---
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawGrid();
+    drawAxes();
+    drawRegression();
+    drawPoints();
+  }
+
+  function drawGrid() {
+    const { xMin, xMax, yMin, yMax } = DATA_RANGE;
+    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+    ctx.lineWidth = 1;
+    for (let x = xMin; x <= xMax; x++) {
+      const { cx } = dataToCanvas(x, 0);
+      ctx.beginPath(); ctx.moveTo(cx, PAD.top); ctx.lineTo(cx, canvas.height - PAD.bottom); ctx.stroke();
+    }
+    for (let y = yMin; y <= yMax; y++) {
+      const { cy } = dataToCanvas(0, y);
+      ctx.beginPath(); ctx.moveTo(PAD.left, cy); ctx.lineTo(canvas.width - PAD.right, cy); ctx.stroke();
+    }
+  }
+
+  function drawAxes() {
+    const { xMin, xMax, yMin, yMax } = DATA_RANGE;
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+    ctx.lineWidth = 1.5;
+
+    // X-axis
+    const { cy: yCenterY } = dataToCanvas(0, 0);
+    ctx.beginPath();
+    ctx.moveTo(PAD.left, yCenterY);
+    ctx.lineTo(canvas.width - PAD.right, yCenterY);
+    ctx.stroke();
+
+    // Y-axis
+    const { cx: xCenterX } = dataToCanvas(0, 0);
+    ctx.beginPath();
+    ctx.moveTo(xCenterX, PAD.top);
+    ctx.lineTo(xCenterX, canvas.height - PAD.bottom);
+    ctx.stroke();
+
+    // Tick labels
+    ctx.fillStyle = 'rgba(139,148,158,0.8)';
+    ctx.font = `11px 'JetBrains Mono', monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    for (let x = xMin; x <= xMax; x += 2) {
+      if (x === 0) continue;
+      const { cx } = dataToCanvas(x, 0);
+      ctx.fillText(x, cx, yCenterY + 6);
+    }
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    for (let y = yMin; y <= yMax; y += 2) {
+      if (y === 0) continue;
+      const { cy } = dataToCanvas(0, y);
+      ctx.fillText(y, xCenterX - 6, cy);
+    }
+
+    // Axis labels
+    ctx.fillStyle = 'rgba(139,148,158,0.6)';
+    ctx.font = `13px 'Outfit', sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText('x', canvas.width - PAD.right + 12, yCenterY - 7);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('y', xCenterX + 6, PAD.top - 10);
+  }
+
+  function drawRegression() {
+    const lsr = computeLSR(points);
+    if (!lsr) return;
+    const { m, b } = lsr;
+
+    // Compute endpoints at xMin and xMax
+    const { xMin, xMax } = DATA_RANGE;
+    const y0 = m * xMin + b;
+    const y1 = m * xMax + b;
+    const { cx: x0c, cy: y0c } = dataToCanvas(xMin, y0);
+    const { cx: x1c, cy: y1c } = dataToCanvas(xMax, y1);
+
+    // Glow pass
+    ctx.save();
+    ctx.strokeStyle = 'rgba(88,166,255,0.2)';
+    ctx.lineWidth = 8;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(x0c, y0c);
+    ctx.lineTo(x1c, y1c);
+    ctx.stroke();
+
+    // Main line
+    ctx.strokeStyle = '#58a6ff';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(x0c, y0c);
+    ctx.lineTo(x1c, y1c);
+    ctx.stroke();
+    ctx.restore();
+
+    // Update stats
+    const mStr = m.toFixed(3);
+    const bStr = b >= 0 ? `+${b.toFixed(3)}` : b.toFixed(3);
+    statM.textContent  = m.toFixed(4);
+    statB.textContent  = b.toFixed(4);
+    statEq.textContent = `y = ${mStr}x ${bStr}`;
+    statM.classList.remove('empty');
+    statB.classList.remove('empty');
+    statEq.classList.remove('empty');
+  }
+
+  function drawPoints() {
+    for (const p of points) {
+      const { cx, cy } = dataToCanvas(p.x, p.y);
+      // Glow
+      const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, 12);
+      grd.addColorStop(0, 'rgba(247,204,91,0.35)');
+      grd.addColorStop(1, 'rgba(247,204,91,0)');
+      ctx.beginPath(); ctx.arc(cx, cy, 12, 0, Math.PI * 2);
+      ctx.fillStyle = grd; ctx.fill();
+      // Dot
+      ctx.beginPath(); ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+      ctx.fillStyle = '#f7cc5b';
+      ctx.fill();
+    }
+  }
+
+  // --- Mouse / click ---
+  function getCanvasPos(e) {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width  / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return {
+      cx: (e.clientX - rect.left) * scaleX,
+      cy: (e.clientY - rect.top)  * scaleY,
+    };
+  }
+
+  canvas.addEventListener('click', (e) => {
+    const { cx, cy } = getCanvasPos(e);
+    // Clamp to plot area
+    if (
+      cx < PAD.left || cx > canvas.width  - PAD.right ||
+      cy < PAD.top  || cy > canvas.height - PAD.bottom
+    ) return;
+
+    const { dx, dy } = canvasToData(cx, cy);
+    points.push({ x: dx, y: dy });
+    statN.textContent = points.length;
+    statN.classList.remove('empty');
+
+    if (points.length < 2) {
+      statM.textContent = '—'; statM.classList.add('empty');
+      statB.textContent = '—'; statB.classList.add('empty');
+      statEq.textContent = '—'; statEq.classList.add('empty');
+    }
+    draw();
+  });
+
+  // Hover cursor feedback
+  canvas.addEventListener('mousemove', (e) => {
+    const { cx, cy } = getCanvasPos(e);
+    const inPlot =
+      cx >= PAD.left && cx <= canvas.width  - PAD.right &&
+      cy >= PAD.top  && cy <= canvas.height - PAD.bottom;
+    canvas.style.cursor = inPlot ? 'crosshair' : 'default';
+  });
+
+  // --- Reset ---
+  document.getElementById('reset-btn').addEventListener('click', () => {
+    points = [];
+    statN.textContent  = '—'; statN.classList.add('empty');
+    statM.textContent  = '—'; statM.classList.add('empty');
+    statB.textContent  = '—'; statB.classList.add('empty');
+    statEq.textContent = '—'; statEq.classList.add('empty');
+    draw();
+  });
+
+  // --- Init ---
+  window.addEventListener('resize', resize);
+  resize();
+</script>
+</body>
+</html>
